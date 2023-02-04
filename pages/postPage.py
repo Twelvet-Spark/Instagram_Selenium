@@ -1,116 +1,105 @@
-import secrets
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium import webdriver
+from undetected_chromedriver import Chrome
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import components.settings as settings
+import time
+
+# TODO: Instead of checking media height only in carousel, check it also for single media post
+# TODO: Change all to one element in multiple media posts
+# TODO: line 77 hardcoded url https://www.instagram.com/
 
 class PostPage:
-    def __init__(self, driver: webdriver, id):
+    def __init__(self, driver: Chrome):
         self.driver = driver
-        self.id = id
-        self.posts_to_like = settings.posts_to_like
-        self.posts_to_comment = settings.posts_to_comment
-        self.comments_good = settings.comments_good
-        self.comments_bad = settings.comments_bad
-        self.postUrl = []
-        self.likeStatusSvg = ""
-        self.likeButton = ""
-        self.textArea = ""
-        self.sendTextButton = ""
-        self.nicknameInComment = ""
-        self.commentText = ""
-    
-    def likePost(self, url="from list"):
-        # Проверка списка постов для лайков или замена его на единичный пост переданный параметром
-        if url == "from list":
-            if len(self.posts_to_like) == 0:
-                print(f"[Драйвер - {self.id}] Список постов для лайков пуст!")
-                return 0
-            self.postUrl = self.posts_to_like.copy()
-        else:
-            self.postUrl.append(url)
-        # Начало поставления лайка
-        for i in range(0, len(self.postUrl)):
-            self.driver.get(self.postUrl[i])
-            try:
-                WebDriverWait(self.driver, 10).until(EC.url_matches(self.postUrl[i])) # Проверяем перешли ли мы по ссылке на пост
-            except Exception as e:
-                print(f"[Драйвер - {self.id}] Не получилось перейти по ссылке {self.postUrl[i]}")
-                continue # Переходим к следующему посту TODO: Посты с ошибками добавлять в отдельный массив, чтобы позже их исправить
-            else:
-                print(f"[Драйвер - {self.id}] Успешный переход по ссылке {self.postUrl[i]}")
-            # Проверка на наличие лайка, после чего ставится сам лайк
-            try:
-                self.likeStatusSvg = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "svg[aria-label=\"Like\"][height=\"24\"],[aria-label=\"Unlike\"][height=\"24\"]"))).get_attribute("aria-label") # Если не лайкнут
-            except Exception as e:
-                print(f"[Драйвер - {self.id}] Не получилось найти состояние кнопки лайка")
-                continue # Загружаем другой пост
-            try:
-                if self.likeStatusSvg == "Like":
-                    self.driver.find_element(by=By.CSS_SELECTOR, value=f"svg[aria-label=\"{self.likeStatusSvg}\"]").find_element(by=By.XPATH, value="..").find_element(by=By.XPATH, value="..").click()
-                elif self.likeStatusSvg == "Unlike":
-                    print(f"[Драйвер - {self.id}] Пост уже лайкнут {self.postUrl[i]}")
-                    continue # Следующий пост
-            except Exception as e:
-                print(f"[Драйвер - {self.id}] Не смог лайкнуть пост {self.postUrl[i]}")
-            else:    
-                print(f"[Драйвер - {self.id}] Пост успешно лайкнут {self.postUrl[i]}")
+        self.posts_to_scrape = settings.posts_to_scrape
+        self.postsURLs = []
+        self.mediaType = ""
+        self.postType = ""
+        self.isStories = False
+        self.isMultipleMedia = False
+        self.timeToFindVideo = 1
+        self.carouselMedia = []
+        self.carouselTimeToWaitNextButtonAppear = 1 # SECONDS How long bot will wait until Next button appear or not. (Slightly make script faster, but i don't recommend changing this)
+        self.carouselTimeBetweenSlides = 1 # SECONDS How fast slides will be chaged, less > faster. (Could make script lot faster, just make sure all media is loaded in this time)
 
-    def commentPosts(self, comment="good", url="from list"):
-        # Проверка списка постов для комментариев или замена его на единичный пост переданный параметром
-        if url == "from list":
-            if len(self.posts_to_comment) == 0:
-                print(f"[Драйвер - {self.id}] Список постов для комментариев пуст!")
-                return 0
-            self.postUrl = self.posts_to_comment.copy()
+    def scrape_links(self):
+        if len(self.posts_to_scrape) == 0:
+            print(f"[Driver] The list of posts is empty!")
+            return 0
         else:
-            self.postUrl.append(url)
-        # Определение характера комментария и его текста или замена его на переданный из параметра
-        if comment == "good":
-            self.commentText = secrets.choice(settings.comments_good)
-        elif comment == "bad":
-            self.commentText = secrets.choice(settings.comments_bad)
-        else:
-            self.commentText = comment
-        # Начало поставления комментария
-        for i in range(0, len(self.postUrl)):
-            self.driver.get(self.postUrl[i])
+            self.postsURLs = self.posts_to_scrape.copy()
+        # Main cycle for posts scraping.
+        for url in self.postsURLs:
+            self.carouselMedia.clear()
+            self.driver.get(url)
             try:
-                WebDriverWait(self.driver, 10).until(EC.url_matches(self.postUrl[i])) # Проверяем перешли ли мы по ссылке на пост
-            except Exception as e:
-                print(f"[Драйвер - {self.id}] Не получилось перейти по ссылке {self.postUrl[i]}")
-                continue # Переходим к следующему посту TODO: Посты с ошибками добавлять в отдельный массив, чтобы позже их исправить
-            else:
-                print(f"[Драйвер - {self.id}] Успешный переход по ссылке {self.postUrl[i]}")
-            # Проверяем есть ли наш никнейм в коммантариях (Он обычно стоит в определённом месте)
-            try:
-                self.nicknameInComment = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "ul._a9ym:nth-child(2) > div:nth-child(1) > li:nth-child(1) > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > h3:nth-child(1) > div:nth-child(1) > span:nth-child(1) > a:nth-child(1)"))).text
-                if self.nicknameInComment == settings.login_data[self.id]["username"]:
-                    print(f"[Драйвер - {self.id}] Пост уже был прокомментирован {self.postUrl[i]}")
-                    continue # Продолжаем, если пост уже прокомментирован
-                else:
+                if WebDriverWait(self.driver, 1).until(EC.url_contains("stories")):
                     try:
-                        self.textArea = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "textarea[aria-label=\"Add a comment…\"]")))
-                    except Exception:
-                        print(f"[Драйвер - {self.id}] Не смог найти поле ввода комментария")
-                    else:
-                        try:
-                            self.sendTextButton = WebDriverWait(self.driver, 10).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div[role=\"button\"]")))
-                            for button in self.sendTextButton:
-                                if button.text == "Post":
-                                    self.sendTextButton = button
-                            self.textArea.send_keys(self.commentText)
-                            self.sendTextButton.click()
-                        except Exception as e:
-                            print(f"[Драйвер - {self.id}] Не смог получить состояние или кликнуть на кнопку отправки комментария")
-                        try:
-                            WebDriverWait(self.driver, 10).until(EC.invisibility_of_element_located((By.CSS_SELECTOR, "svg[aria-label=\"Loading...\"]")))
-                            self.nicknameInComment = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "ul._a9ym:nth-child(2) > div:nth-child(1) > li:nth-child(1) > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > h3:nth-child(1) > div:nth-child(1) > span:nth-child(1) > a:nth-child(1)"))).text
-                            if self.nicknameInComment == settings.login_data[self.id]["username"]:
-                                print(f"[Драйвер - {self.id}] Пост успешно прокомментирован {self.postUrl[i]}")
-                                continue                                
-                        except Exception as e:
-                            print(f"[Драйвер - {self.id}] Не удалось удостовериться в отправке комментария к посту {self.postUrl[i]}")
+                        viewStoryTextBool = WebDriverWait(self.driver, 10).until(EC.text_to_be_present_in_element((By.CSS_SELECTOR, "button[type=\"button\"]"), "View story"))
+                        if viewStoryTextBool:
+                            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "button[type=\"button\"]"))).click()
+                            self.isStories = True
+                    except TimeoutException:
+                        pass
+                    except Exception as e:
+                        raise(e)
+            except TimeoutException:
+                pass
             except Exception as e:
-                print(f"[Драйвер - {self.id}] Не смог найти никнейм комментария")
+                raise(e)
+            if not self.isStories:
+                WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[style=\"position: relative; display: flex; flex-direction: column; padding-bottom: 0px; padding-top: 0px;\"]")))
+            try:
+                # Search for next media button in post to check if it is carousel.
+                self.driver.find_element(by=By.CSS_SELECTOR, value="button[aria-label=\"Next\"]")
+                print(f"[Driver] Multiple media post {url}:")
+                self.isMultipleMedia = True
+            except NoSuchElementException:
+                print(f"[Driver] Single media post {url}:")
+                self.isMultipleMedia = False
+            except Exception as e:
+                raise(e)
+            # If post contains carousel
+            if self.isMultipleMedia == True:
+                maxSizeImageHeight = 0 # I think in all cases main post media has the biggest height and width. Using this we can sort out any other media on page.
+                while True:
+                    time.sleep(self.carouselTimeBetweenSlides)
+                    try:
+                        medias = WebDriverWait(self.driver, self.timeToFindVideo).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "video")))
+                        self.postType = "Video"
+                    except TimeoutException:
+                        medias = WebDriverWait(self.driver, 10).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "img[crossorigin=\"anonymous\"]:not([draggable=\"false\"])")))
+                        self.postType = "Image"
+                    except Exception as e:
+                        raise(e)
+                    for media in medias:
+                        if media.size["height"] > maxSizeImageHeight:
+                            maxSizeImageHeight = media.size["height"]
+                        if {"src": media.get_attribute('src'), "height": media.size["height"], "type": self.postType} not in self.carouselMedia:
+                            self.carouselMedia.append({"src": media.get_attribute('src'), "height": media.size["height"], "type": self.postType})
+                    try:
+                        # Check if we are ended watching stories
+                        if self.isStories:
+                            if self.driver.current_url == "https://www.instagram.com/":
+                                break
+                        WebDriverWait(self.driver, self.carouselTimeToWaitNextButtonAppear).until(EC.presence_of_element_located((By.CSS_SELECTOR, "button[aria-label=\"Next\"]"))).click()
+                    except TimeoutException:
+                        break
+                    except Exception as e:
+                        raise(e)
+                for url in self.carouselMedia:
+                    if url['height'] == maxSizeImageHeight: # Filter media by comaring their height to height of the main post media.
+                        print(f"--{url['type']}\n{url['src']}\n")
+            # If post is single media file.
+            # WARNING: Possible media mismatched delivered.
+            elif self.isMultipleMedia == False:
+                media = WebDriverWait(self.driver, 10).until(EC.any_of(EC.presence_of_element_located((By.CSS_SELECTOR, "img[crossorigin=\"anonymous\"]:not([draggable=\"false\"])")), EC.presence_of_element_located((By.CSS_SELECTOR, "video"))))
+                if media.tag_name == "img":
+                    self.postType = "Image"
+                elif media.tag_name == "video":
+                    self.postType = "Video"
+                else:
+                    self.postType = "Other"
+                print(f"--{self.postType}\n{media.get_attribute('src')}\n")

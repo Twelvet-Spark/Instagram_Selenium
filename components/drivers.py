@@ -1,51 +1,34 @@
-from selenium import webdriver
-from selenium.webdriver.support import expected_conditions as ES
 from pages.loginPage import LoginPage
 from pages.postPage import PostPage
-from selenium.webdriver.firefox.options import Options
+import undetected_chromedriver as uc
 
 class Drivers():
-    def __init__(self, amount, http, headless=False):
+    def __init__(self, headless=False):
         self.headless = headless
-        self.amount = amount
-        self.options = webdriver.FirefoxOptions()
-        self.http = http
-        self.drivers = []
+        self.options = uc.ChromeOptions()
+        self.http = 'https://www.instagram.com/'
         self.driver = ""
 
-    def create_drivers(self):
+    def create_driver(self):
         if self.headless == True:
             self.options.headless = True
-        for i in range(0, self.amount):
-            self.options.preferences.update({'intl.accept_languages': 'en,en_US'})
-            self.driver = webdriver.Firefox(options=self.options)
-            self.drivers.append(self.driver)
-        print(f"Создано {self.amount} драйверов, режим headless = {self.options.headless}\n")
+        self.options.add_experimental_option('prefs', {'intl.accept_languages': 'en,en_US'})
+        self.driver = uc.Chrome(options=self.options)
+        print(f"Created driver, mode headless = {self.options.headless}\n")
 
-    def get_drivers(self):
-        return self.drivers
+    def get_driver(self):
+        return self.driver
 
-    def get_driver(self, index):
-        return self.drivers[index]
+    def start_driver(self):
+        self.driver.get(self.http)
+        print(f"[Driver] Successful link click {self.http}\n")
 
-    def start_drivers(self):
-        for i in range(0, self.amount):
-            self.drivers[i].get(self.http)
-            print(f"[Драйвер - {i}] Успешный переход по ссылке {self.http}\n")
+    def stop_driver(self):
+        self.driver.close()
+        print(f"[Driver] Closed\n")
 
-    def stop_drivers(self):
-        for i in range(0, self.amount):
-            self.drivers[i].close()
-        print(f"Все {self.amount} драйвера закрыты\n")
+    def login_driver(self):
+        LoginPage(self.driver).login()
 
-    def login_drivers(self):
-        for i in range(0, self.amount):
-            LoginPage(self.drivers[i], i).login()
-
-    def like_posts(self, url="from list"):
-        for i in range(0, self.amount):
-            PostPage(self.drivers[i], i).likePost(url)
-
-    def comment_posts(self, comment="good", url="from list"):
-        for i in range(0, self.amount):
-            PostPage(self.drivers[i], i).commentPosts(comment, url)
+    def start_scraping(self):
+        PostPage(self.driver).scrape_links()

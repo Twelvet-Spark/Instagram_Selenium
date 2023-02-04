@@ -1,22 +1,21 @@
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from undetected_chromedriver import Chrome
 import components.settings as settings
-from time import sleep
 
 class LoginPage:
-    def __init__(self, driver, id):
+    def __init__(self, driver: Chrome):
         self.driver = driver
-        self.id = id
     
     def login(self):
         username_input = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[name='username']")))
         password_input = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[name='password']")))
 
-        username_input.send_keys(settings.login_data[self.id]["login"])
-        password_input.send_keys(settings.login_data[self.id]["password"])
+        username_input.send_keys(settings.login_data["login"])
+        password_input.send_keys(settings.login_data["password"])
 
-        login_button = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, "//button[@type='submit']")))
+        login_button = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']")))
         login_button.click()
         
         try:
@@ -29,8 +28,8 @@ class LoginPage:
             pass
 
         try:
-            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, f"a[href=\"/{settings.login_data[self.id]['username']}/\"]")))
+            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, f"a[href=\"/{settings.login_data['username']}/\"]")))
         except Exception:
-            print(f"[Драйвер - {self.id}] Вход НЕ выполнен\n")
+            print(f"[Driver] Login failed\n")
         else:
-            print(f"[Драйвер - {self.id}] Вход успешно выполнен\n")
+            print(f"[Driver] Login completed successfully\n")
